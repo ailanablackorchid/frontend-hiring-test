@@ -9,9 +9,10 @@ import {
   type Message,
 } from "../__generated__/resolvers-types";
 import css from "./chat.module.css";
-import { useMutation, useQuery } from "@apollo/client";
+import { useMutation, useQuery, useSubscription } from "@apollo/client";
 import { MESSAGES_QUERY } from "./graphql/queries";
 import { SEND_MESSAGE } from "./graphql/mutations";
+import { MESSAGE_ADDED } from "./graphql/subscriptions";
 
 const PAGE_SIZE = 5;
 
@@ -48,6 +49,21 @@ export const Chat: React.FC = () => {
     messages: MessagePage;
   }>(MESSAGES_QUERY, {
     variables: { first: PAGE_SIZE },
+  });
+
+  useSubscription(MESSAGE_ADDED, {
+    onData: ({ data }) => {
+      const newMessage = data.data?.messageAdded;
+      console.log("New message:", newMessage);
+      if (!newMessage) return;
+
+      setMessages((prev) => {
+        console.log("prevState Added", prev);
+
+        if (prev.find((m: Message) => m.id === newMessage.id)) return prev;
+        return [...prev, newMessage];
+      });
+    },
   });
 
   // Send message mutation
