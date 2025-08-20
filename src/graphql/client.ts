@@ -30,6 +30,16 @@ const link = split(
 
 const cache = new InMemoryCache({
   typePolicies: {
+    Message: {
+      keyFields: ["id"],
+      fields: {
+        updatedAt: {
+          merge(existing, incoming) {
+            return existing && existing > incoming ? existing : incoming;
+          },
+        },
+      },
+    },
     Query: {
       fields: {
         messages: {
