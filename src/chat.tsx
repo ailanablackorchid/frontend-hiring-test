@@ -1,20 +1,42 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ItemContent, Virtuoso } from "react-virtuoso";
 import cn from "clsx";
 import {
+  MessagePage,
   MessageSender,
-  MessageStatus,
   type Message,
 } from "../__generated__/resolvers-types";
 import css from "./chat.module.css";
+import { gql, useQuery } from "@apollo/client";
 
-const temp_data: Message[] = Array.from(Array(30), (_, index) => ({
-  id: String(index),
-  text: `Message number ${index}`,
-  status: MessageStatus.Read,
-  updatedAt: new Date().toISOString(),
-  sender: index % 2 ? MessageSender.Admin : MessageSender.Customer,
-}));
+// const temp_data: Message[] = Array.from(Array(30), (_, index) => ({
+//   id: String(index),
+//   text: `Message number ${index}`,
+//   status: MessageStatus.Read,
+//   updatedAt: new Date().toISOString(),
+//   sender: index % 2 ? MessageSender.Admin : MessageSender.Customer,
+// }));
+
+const MESSAGES_QUERY = gql`
+  query Messages($first: Int!, $after: MessagesCursor) {
+    messages(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          text
+          status
+          updatedAt
+          sender
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
 
 const Item: React.FC<Message> = ({ text, sender }) => {
   return (
@@ -23,8 +45,7 @@ const Item: React.FC<Message> = ({ text, sender }) => {
         className={cn(
           css.message,
           sender === MessageSender.Admin ? css.out : css.in
-        )}
-      >
+        )}>
         {text}
       </div>
     </div>
@@ -36,10 +57,27 @@ const getItem: ItemContent<Message, unknown> = (_, data) => {
 };
 
 export const Chat: React.FC = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  const { data: messagesData, loading: isMessagesDataLoading } = useQuery<{
+    messages: MessagePage;
+  }>(MESSAGES_QUERY, {
+    variables: { first: 5 },
+  });
+
+  useEffect(() => {
+    if (messagesData?.messages?.edges) {
+      const fetched = messagesData.messages.edges.map((e) => e.node);
+      setMessages(fetched);
+    }
+  }, [messagesData]);
+
   return (
     <div className={css.root}>
       <div className={css.container}>
-        <Virtuoso className={css.list} data={temp_data} itemContent={getItem} />
+        {/* TODO: loader on uploading new messages */}
+        {isMessagesDataLoading && <p>loading...</p>}
+        <Virtuoso className={css.list} data={messages} itemContent={getItem} />
       </div>
       <div className={css.footer}>
         <input
