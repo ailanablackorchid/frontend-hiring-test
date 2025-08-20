@@ -9,22 +9,11 @@ import {
   type Message,
 } from "../__generated__/resolvers-types";
 import css from "./chat.module.css";
-import { gql, useMutation, useQuery } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client";
 import { MESSAGES_QUERY } from "./graphql/queries";
+import { SEND_MESSAGE } from "./graphql/mutations";
 
 const PAGE_SIZE = 5;
-
-const SEND_MESSAGE = gql`
-  mutation SendMessage($text: String!) {
-    sendMessage(text: $text) {
-      id
-      text
-      status
-      updatedAt
-      sender
-    }
-  }
-`;
 
 const Item: React.FC<Message> = ({ text, sender, status }) => {
   return (
@@ -48,7 +37,6 @@ const getItem: ItemContent<Message, unknown> = (_, data) => {
 
 export const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [sendMessage] = useMutation(SEND_MESSAGE);
   const [text, setText] = useState<string>("");
 
   // Fetch messages with pagination
@@ -62,10 +50,13 @@ export const Chat: React.FC = () => {
     variables: { first: PAGE_SIZE },
   });
 
-  function updateMessagesFromData(
+  // Send message mutation
+  const [sendMessage] = useMutation(SEND_MESSAGE);
+
+  const updateMessagesFromData = (
     setMessages: (msgs: Message[]) => void,
     messagesData?: { messages?: MessagePage }
-  ) {
+  ) => {
     console.log("updateMessagesFromData", messagesData?.messages);
     if (messagesData?.messages?.edges) {
       const fetched = messagesData?.messages?.edges?.map(
@@ -79,7 +70,7 @@ export const Chat: React.FC = () => {
         })(messages)
       );
     }
-  }
+  };
 
   const handleSend = () => {
     if (!text.trim()) return;
@@ -138,8 +129,12 @@ export const Chat: React.FC = () => {
           placeholder="Message text"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleSend();
+            }
+          }}
         />
-        {/* TODO: send on enter key click */}
         <button onClick={handleSend}>Send</button>
       </div>
     </div>
