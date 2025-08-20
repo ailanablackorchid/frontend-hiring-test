@@ -5,6 +5,7 @@ import {
   MessageEdge,
   MessagePage,
   MessageSender,
+  MessageStatus,
   type Message,
 } from "../__generated__/resolvers-types";
 import css from "./chat.module.css";
@@ -70,16 +71,34 @@ export const Chat: React.FC = () => {
       const fetched = messagesData?.messages?.edges?.map(
         (e: MessageEdge) => e?.node
       );
-      setMessages(fetched);
+      // setMessages(fetched);
+      setMessages(
+        ((prev) => {
+          const seen = new Set(prev.map((m: Message) => m.id));
+          return [...prev, ...fetched.filter((m) => !seen.has(m.id))];
+        })(messages)
+      );
     }
   }
 
   const handleSend = () => {
     if (!text.trim()) return;
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      text,
+      status: MessageStatus.Sending,
+      updatedAt: new Date().toISOString(),
+      sender: MessageSender.Admin,
+      __typename: "Message",
+    };
+    setMessages((prev) => [...prev, optimisticMsg]); // <-- Add this line
+
     sendMessage({
       variables: { text },
+      optimisticResponse: {
+        sendMessage: optimisticMsg,
+      },
     });
-
     setText("");
   };
 
@@ -94,6 +113,7 @@ export const Chat: React.FC = () => {
           className={css.list}
           data={messages}
           itemContent={getItem}
+          followOutput="smooth"
           endReached={() => {
             if (messagesData?.messages?.pageInfo?.hasNextPage) {
               fetchMore({
