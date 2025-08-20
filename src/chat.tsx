@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ItemContent, Virtuoso } from "react-virtuoso";
 import cn from "clsx";
 import {
+  MessageEdge,
   MessagePage,
   MessageSender,
   type Message,
@@ -16,6 +17,8 @@ import { gql, useQuery } from "@apollo/client";
 //   updatedAt: new Date().toISOString(),
 //   sender: index % 2 ? MessageSender.Admin : MessageSender.Customer,
 // }));
+
+const PAGE_SIZE = 5;
 
 const MESSAGES_QUERY = gql`
   query Messages($first: Int!, $after: MessagesCursor) {
@@ -38,7 +41,7 @@ const MESSAGES_QUERY = gql`
   }
 `;
 
-const Item: React.FC<Message> = ({ text, sender }) => {
+const Item: React.FC<Message> = ({ text, sender, status }) => {
   return (
     <div className={css.item}>
       <div
@@ -47,6 +50,8 @@ const Item: React.FC<Message> = ({ text, sender }) => {
           sender === MessageSender.Admin ? css.out : css.in
         )}>
         {text}
+        {/* TODO: loader on uploading new messages */}
+        {"(" + status + ")"}
       </div>
     </div>
   );
@@ -59,15 +64,19 @@ const getItem: ItemContent<Message, unknown> = (_, data) => {
 export const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
 
-  const { data: messagesData, loading: isMessagesDataLoading } = useQuery<{
+  const {
+    data: messagesData,
+    loading: isMessagesDataLoading,
+    fetchMore,
+  } = useQuery<{
     messages: MessagePage;
   }>(MESSAGES_QUERY, {
-    variables: { first: 5 },
+    variables: { first: PAGE_SIZE },
   });
 
   useEffect(() => {
     if (messagesData?.messages?.edges) {
-      const fetched = messagesData.messages.edges.map((e) => e.node);
+      const fetched = messagesData.messages.edges.map((e: MessageEdge) => e.node);
       setMessages(fetched);
     }
   }, [messagesData]);
@@ -77,7 +86,26 @@ export const Chat: React.FC = () => {
       <div className={css.container}>
         {/* TODO: loader on uploading new messages */}
         {isMessagesDataLoading && <p>loading...</p>}
-        <Virtuoso className={css.list} data={messages} itemContent={getItem} />
+        <Virtuoso
+          className={css.list}
+          data={messages}
+          itemContent={getItem}
+          endReached={() => {
+            if (messagesData?.messages.pageInfo.hasNextPage) {
+              fetchMore({
+                variables: {
+                  first: PAGE_SIZE,
+                  after: messagesData.messages.pageInfo.endCursor,
+                },
+              }).then((res) => {
+                const fetched = res.data.messages.edges.map(
+                  (e: MessageEdge) => e.node
+                );
+                setMessages(fetched);
+              });
+            }
+          }}
+        />
       </div>
       <div className={css.footer}>
         <input
@@ -85,6 +113,7 @@ export const Chat: React.FC = () => {
           className={css.textInput}
           placeholder="Message text"
         />
+        {/* TODO: send on enter key click */}
         <button>Send</button>
       </div>
     </div>
