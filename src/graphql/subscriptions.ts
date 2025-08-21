@@ -11,3 +11,15 @@ export const MESSAGE_ADDED = gql`
     }
   }
 `;
+
+export const MESSAGE_UPDATED = gql`
+  subscription {
+    messageUpdated {
+      id
+      text
+      status
+      updatedAt
+      sender
+    }
+  }
+`;

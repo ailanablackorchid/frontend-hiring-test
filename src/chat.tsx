@@ -12,7 +12,7 @@ import css from "./chat.module.css";
 import { useMutation, useQuery, useSubscription } from "@apollo/client";
 import { MESSAGES_QUERY } from "./graphql/queries";
 import { SEND_MESSAGE } from "./graphql/mutations";
-import { MESSAGE_ADDED } from "./graphql/subscriptions";
+import { MESSAGE_ADDED, MESSAGE_UPDATED } from "./graphql/subscriptions";
 
 const PAGE_SIZE = 5;
 
@@ -58,35 +58,53 @@ export const Chat: React.FC = () => {
       if (!newMessage) return;
 
       setMessages((prev) => {
-        console.log("prevState Added", prev);
-
-        if (prev.find((m: Message) => m.id === newMessage.id)) return prev;
-        return [...prev, newMessage];
+        const withoutOptimistic = prev.filter(
+          (m) =>
+            !(
+              m.text === newMessage.text &&
+              m.sender === newMessage.sender &&
+              m.status === "Sending"
+            )
+        );
+        if (withoutOptimistic.find((m) => m.id === newMessage.id))
+          return withoutOptimistic;
+        return [...withoutOptimistic, newMessage];
       });
+    },
+  });
+
+  useSubscription(MESSAGE_UPDATED, {
+    onData: ({ data }) => {
+      const updated = data.data?.messageUpdated;
+      console.log("Updated message:", updated);
+      if (!updated) return;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === updated.id && updated.updatedAt > m.updatedAt
+            ? { ...m, ...updated }
+            : m
+        )
+      );
     },
   });
 
   // Send message mutation
   const [sendMessage] = useMutation(SEND_MESSAGE);
 
-  const updateMessagesFromData = (
-    setMessages: (msgs: Message[]) => void,
-    messagesData?: { messages?: MessagePage }
-  ) => {
-    console.log("updateMessagesFromData", messagesData?.messages);
+  useEffect(() => {
     if (messagesData?.messages?.edges) {
-      const fetched = messagesData?.messages?.edges?.map(
-        (e: MessageEdge) => e?.node
-      );
-      // setMessages(fetched);
-      setMessages(
-        ((prev) => {
-          const seen = new Set(prev.map((m: Message) => m.id));
-          return [...prev, ...fetched.filter((m) => !seen.has(m.id))];
-        })(messages)
-      );
+      const fetched = messagesData.messages.edges.map((e) => e.node);
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...prev, ...fetched.filter((m) => !seen.has(m.id))];
+      });
     }
-  };
+  }, [messagesData]);
+
+  useEffect(() => {
+    console.log("Messages updated:", messages);
+  }, [messages]);
 
   const handleSend = () => {
     if (!text.trim()) return;
@@ -98,20 +116,12 @@ export const Chat: React.FC = () => {
       sender: MessageSender.Admin,
       __typename: "Message",
     };
-    setMessages((prev) => [...prev, optimisticMsg]); // <-- Add this line
 
-    sendMessage({
-      variables: { text },
-      optimisticResponse: {
-        sendMessage: optimisticMsg,
-      },
-    });
+    setMessages((prev) => [...prev, optimisticMsg]);
+
+    sendMessage({ variables: { text } });
     setText("");
   };
-
-  useEffect(() => {
-    updateMessagesFromData(setMessages, messagesData);
-  }, [messagesData]);
 
   return (
     <div className={css.root}>
@@ -129,7 +139,16 @@ export const Chat: React.FC = () => {
                   after: messagesData?.messages?.pageInfo?.endCursor,
                 },
               }).then((res) => {
-                updateMessagesFromData(setMessages, res?.data);
+                const fetched = res.data.messages.edges.map(
+                  (e: MessageEdge) => e.node
+                );
+                setMessages((prev) => {
+                  const seen = new Set(prev.map((m: Message) => m.id));
+                  return [
+                    ...prev,
+                    ...fetched.filter((m: Message) => !seen.has(m.id)),
+                  ];
+                });
               });
             }
           }}
