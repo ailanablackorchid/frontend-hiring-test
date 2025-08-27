@@ -24,9 +24,17 @@ const Item: React.FC<Message> = ({ text, sender, status }) => {
           css.message,
           sender === MessageSender.Admin ? css.out : css.in
         )}>
-        {text}
-        {/* TODO: style message status */}
-        {"(" + status + ")"}
+        <div className={css.messageSender}>{sender}</div>
+        <p className={css.messageText}>{text}</p>
+        {sender === MessageSender.Admin && (
+          <div
+            className={cn(
+              css.messageStatus,
+              status === "Read" && css.messageStatusRead
+            )}>
+            {status}
+          </div>
+        )}
       </div>
     </div>
   );
